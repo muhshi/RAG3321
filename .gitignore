@@ -1,0 +1,30 @@
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environments
+.env
+.venv
+venv/
+ENV/
+env/
+
+# Logs
+logs/
+*.log
+
+# Databases & local storage
+# database/*.db
+# database/*.sqlite
+# database/*.json
+# data_publikasi/demak/*/*/*.pdf
+# !data_publikasi/demak/2026/01/sample_demak_test.pdf
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

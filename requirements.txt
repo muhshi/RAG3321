@@ -1,0 +1,35 @@
+# ==============================================================================
+# BPS RAG Data Pipeline & Indexing System - Dependencies
+# ==============================================================================
+
+# Core & Network
+requests>=2.31.0
+httpx>=0.27.0
+beautifulsoup4>=4.12.3
+lxml>=5.1.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
+tqdm>=4.66.2
+
+# PDF Processing & Extraction
+pdfplumber>=0.10.4
+pypdf>=4.1.0
+pdfminer.six>=20231228
+# camelot-py[cv]>=0.11.0 # Optional: requires Ghostscript binary on Windows
+pandas>=2.2.1
+numpy>=1.26.4
+openpyxl>=3.1.2
+
+# NLP, Chunking & Vector Embeddings (For Modules 3 & 4)
+sentence-transformers>=2.5.1
+tiktoken>=0.6.0
+torch>=2.2.0
+
+# Database & Vector DB (For Module 5)
+chromadb>=0.4.24
+# qdrant-client>=1.8.0 # Alternative enterprise vector DB
+
+# Utilities & Logging
+loguru>=0.7.2
+tabulate>=0.9.0

@@ -1,0 +1,60 @@
+{
+  "documents": {
+    "sample": {
+      "metadata": {
+        "publication_id": "sample",
+        "title": "sample_demak_test",
+        "release_date": "2026-08-21",
+        "category": "Statistik Umum",
+        "region": "Kabupaten Demak"
+      },
+      "total_chunks": 2,
+      "chunks": [
+        {
+          "chunk_id": "tbl_sample_110baf4113",
+          "dokumen_id": "sample",
+          "dokumen_sumber": "sample_demak_test",
+          "daerah": "Kabupaten Demak",
+          "kategori": "Kependudukan",
+          "tanggal_publikasi": "2026-08-21",
+          "tahun": "2026",
+          "halaman": 1,
+          "tipe_konten": "tabel_baris",
+          "judul_tabel": "Tabel 1.1 Jumlah Penduduk Menurut Kecamatan di Kabupaten Demak",
+          "satuan": "Jiwa",
+          "sumber": "BPS Kabupaten Demak",
+          "catatan": "",
+          "data": {
+            "Kecamatan": "Mranggen",
+            "Jumlah_Penduduk_Laki_Laki": 105432,
+            "Jumlah_Penduduk_Perempuan": 104521,
+            "Total": 209953
+          },
+          "representasi_teks": "Berdasarkan Tabel 1.1 Jumlah Penduduk Menurut Kecamatan di Kabupaten Demak (sample_demak_test, Tahun 2026): Pada Kecamatan 'Mranggen', nilai Jumlah Penduduk Laki Laki adalah 105.432 Jiwa, nilai Jumlah Penduduk Perempuan adalah 104.521 Jiwa, nilai Total adalah 209.953 Jiwa."
+        },
+        {
+          "chunk_id": "tbl_sample_d415ffdf08",
+          "dokumen_id": "sample",
+          "dokumen_sumber": "sample_demak_test",
+          "daerah": "Kabupaten Demak",
+          "kategori": "Kependudukan",
+          "tanggal_publikasi": "2026-08-21",
+          "tahun": "2026",
+          "halaman": 1,
+          "tipe_konten": "tabel_baris",
+          "judul_tabel": "Tabel 1.1 Jumlah Penduduk Menurut Kecamatan di Kabupaten Demak",
+          "satuan": "Jiwa",
+          "sumber": "BPS Kabupaten Demak",
+          "catatan": "",
+          "data": {
+            "Kecamatan": "Sayung",
+            "Jumlah_Penduduk_Laki_Laki": 54120,
+            "Jumlah_Penduduk_Perempuan": 53900,
+            "Total": 108020
+          },
+          "representasi_teks": "Berdasarkan Tabel 1.1 Jumlah Penduduk Menurut Kecamatan di Kabupaten Demak (sample_demak_test, Tahun 2026): Pada Kecamatan 'Sayung', nilai Jumlah Penduduk Laki Laki adalah 54.120 Jiwa, nilai Jumlah Penduduk Perempuan adalah 53.900 Jiwa, nilai Total adalah 108.020 Jiwa."
+        }
+      ]
+    }
+  }
+}
