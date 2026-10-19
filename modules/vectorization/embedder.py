@@ -25,6 +25,26 @@ class VectorEmbedder:
             return
 
         try:
+            import os
+            import warnings
+            os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+            os.environ["TOKENIZERS_PARALLELISM"] = "false"
+            warnings.filterwarnings("ignore")
+
+            try:
+                from transformers.utils import logging as tf_logging
+                tf_logging.disable_progress_bar()
+                tf_logging.set_verbosity_error()
+            except Exception:
+                pass
+
+            try:
+                from huggingface_hub.utils import disable_progress_bars, logging as hf_logging
+                disable_progress_bars()
+                hf_logging.set_verbosity_error()
+            except Exception:
+                pass
+
             logger.info(f"Loading primary SentenceTransformer model: '{self.model_name}'...")
             from sentence_transformers import SentenceTransformer
             self._model = SentenceTransformer(self.model_name)

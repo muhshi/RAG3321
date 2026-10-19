@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pdfplumber
 from loguru import logger
+from config.settings import settings
 
 
 class BPSTextExtractor:
@@ -53,7 +54,13 @@ class BPSTextExtractor:
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 total_pages = len(pdf.pages)
-                page_indices = pages_to_extract if pages_to_extract is not None else range(1, total_pages + 1)
+                max_pages = getattr(settings, "MAX_EXTRACT_PAGES", None)
+                if pages_to_extract is not None:
+                    page_indices = pages_to_extract
+                elif max_pages:
+                    page_indices = range(1, min(total_pages, max_pages) + 1)
+                else:
+                    page_indices = range(1, total_pages + 1)
 
                 for page_num in page_indices:
                     if page_num > total_pages:

@@ -2,6 +2,7 @@
 Configuration settings for BPS RAG Ingestion and Extraction Pipeline.
 """
 from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 
@@ -16,6 +17,9 @@ class Settings(BaseSettings):
     # SQLite metadata and document registry
     REGISTRY_DB_PATH: Path = DATABASE_DIR / "bps_registry.db"
     DOCUMENT_DB_PATH: Path = DATABASE_DIR / "bps_documents.json"
+    DOCUMENTS_DIR: Path = DATABASE_DIR / "documents"
+    TABLES_DIR: Path = DATABASE_DIR / "tables"
+    NARRATIVES_DIR: Path = DATABASE_DIR / "narratives"
     VECTOR_DB_DIR: Path = DATABASE_DIR / "chroma_store"
 
     # BPS Target configuration
@@ -38,6 +42,7 @@ class Settings(BaseSettings):
     MIN_TABLE_ROWS: int = 2
     MIN_TABLE_COLS: int = 2
     HEADER_MAX_SCAN_ROWS: int = 4  # Max header depth to check for multi-level headers
+    MAX_EXTRACT_PAGES: Optional[int] = None  # None = extract 100% of all pages in the PDF
 
     # Embedding & Vector configuration
     EMBEDDING_MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -57,3 +62,6 @@ settings = Settings()
 settings.DEMAK_DATA_DIR.mkdir(parents=True, exist_ok=True)
 settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
 settings.DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+settings.DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+settings.TABLES_DIR.mkdir(parents=True, exist_ok=True)
+settings.NARRATIVES_DIR.mkdir(parents=True, exist_ok=True)

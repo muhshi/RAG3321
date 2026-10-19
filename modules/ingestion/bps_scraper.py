@@ -107,128 +107,234 @@ class BPSPublicationScraper:
 
         return datetime.utcnow().strftime("%Y-%m-%d")
 
-    def fetch_publication_list(self, max_pages: int = 1, keyword: str = "Demak") -> List[Dict[str, Any]]:
+    def _fetch_url_text_curl(self, url: str) -> str:
+        """Fetches page content using curl.exe to pass government security checks."""
+        import subprocess
+        try:
+            res = subprocess.run(
+                ["curl.exe", "-s", "-L", "--max-time", "30", url],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            if res.returncode == 0:
+                return res.stdout
+        except Exception as e:
+            logger.warning(f"curl.exe fetch failed for {url}: {e}")
+        return ""
+
+    def fetch_publication_list(self, max_pages: int = 2, keyword: str = "Demak") -> List[Dict[str, Any]]:
         """
-        Crawls the BPS publication directory pages.
-        Extracts metadata for each publication card.
+        Crawls the BPS publication catalog and search engine.
+        Extracts metadata for all Demak publications.
         """
         publications: List[Dict[str, Any]] = []
-        logger.info(f"Starting BPS publication discovery for {self.base_url} (Max pages: {max_pages})")
+        seen_urls = set()
+        logger.info(f"Starting BPS publication discovery for keyword '{keyword}' (Max pages: {max_pages})")
 
-        # Try regional URL first, fallback to central BPS if regional blocks
-        urls_to_try = [
-            (self.base_url, f"{self.base_url}{settings.BPS_PUBLICATION_PATH}"),
-            (settings.BPS_CENTRAL_URL, f"{settings.BPS_CENTRAL_URL}/id/publication")
+        search_targets = [
+            # 1. Broad Demak & Compendiums
+            ("Demak", "3321"),
+            ("Demak", "all"),
+            ("Kabupaten Demak", "3321"),
+            ("Kecamatan", "3321"),
+            ("Statistik", "3321"),
+            ("Angka", "3321"),
+            ("Daerah", "3321"),
+            ("Sensus", "3321"),
+            ("Pertanian", "3321"),
+            ("PDRB", "3321"),
+            ("Kesejahteraan", "3321"),
+            ("Kemiskinan", "3321"),
+            ("Kependudukan", "3321"),
+            ("Profil", "3321"),
+            ("Indikator", "3321"),
+            ("Ketenagakerjaan", "3321"),
+            ("Tenaga Kerja", "3321"),
+            ("Perikanan", "3321"),
+            ("Pelelangan Ikan", "3321"),
+            ("Hortikultura", "3321"),
+            ("Industri", "3321"),
+            ("Kesehatan", "3321"),
+            ("Pendidikan", "3321"),
+            ("Potensi Desa", "3321"),
+            ("Podes", "3321"),
+            ("IPM", "3321"),
+            # 2. All 14 Kecamatan in Demak
+            ("Mranggen", "3321"),
+            ("Sayung", "3321"),
+            ("Karangawen", "3321"),
+            ("Guntur", "3321"),
+            ("Bonang", "3321"),
+            ("Wedung", "3321"),
+            ("Mijen", "3321"),
+            ("Gajah", "3321"),
+            ("Karanganyar", "3321"),
+            ("Karangtengah", "3321"),
+            ("Wonosalam", "3321"),
+            ("Dempet", "3321"),
+            ("Kebonagung", "3321"),
+            ("Demak", "3321"),
+            # 3. Notable Desa & Kelurahan in Demak
+            ("Bintoro", "3321"),
+            ("Kadilangu", "3321"),
+            ("Batursari", "3321"),
+            ("Morosari", "3321"),
+            ("Bedono", "3321"),
+            ("Betahwalang", "3321"),
+            ("Morodemak", "3321"),
+            ("Jragung", "3321"),
+            ("Buko", "3321"),
+            ("Tedunan", "3321"),
+            ("Pecuk", "3321"),
+            ("Undaan", "3321"),
+            ("Wilalung", "3321"),
+            ("Trengguli", "3321"),
+            ("Tlogoweru", "3321"),
+            ("Trimulyo", "3321")
         ]
 
-        for base, endpoint in urls_to_try:
-            if publications:
-                break
+        seen_pub_ids = set()
 
+        for kw, mfd in search_targets:
             for page in range(1, max_pages + 1):
-                url = f"{endpoint}?page={page}&keyword={keyword}"
-                logger.info(f"Fetching publication catalog page {page}: {url}")
+                search_url = (
+                    f"http://searchengine.web.bps.go.id/search"
+                    f"?q={kw.replace(' ', '+')}&content=publication&page={page}"
+                    f"&title=0&mfd={mfd}&from=all&to=all&sort=relevansi"
+                )
+                html = self._fetch_url_text_curl(search_url)
+                if not html:
+                    break
 
-                try:
-                    response = self.session.get(url)
-                    if response.status_code != 200:
-                        logger.warning(f"Response status {response.status_code} for {url}")
-                        continue
+                soup = BeautifulSoup(html, "lxml")
+                links = soup.find_all("a", href=True)
+                new_in_page = 0
+                has_demak_link = False
 
-                    soup = BeautifulSoup(response.text, "lxml")
-                    items = soup.select(".card, .list-publication, article, .item-publication, tr, div.publication-item")
-                    
-                    if not items:
-                        items = soup.find_all(["div", "article"], class_=lambda c: c and ("pub" in c.lower() or "card" in c.lower()))
+                for a in links:
+                    href = a["href"]
+                    if "/publication/" in href and "demakkab.bps.go.id" in href:
+                        has_demak_link = True
+                        if href not in seen_urls:
+                            seen_urls.add(href)
+                            parent = a.find_parent(["div", "tr", "li", "article"])
+                            title = ""
+                            desc = ""
+                            if parent:
+                                lines = [l.strip() for l in parent.stripped_strings if len(l.strip()) > 3]
+                                if len(lines) >= 2 and not lines[1].startswith("http"):
+                                    title = lines[1]
+                                elif lines:
+                                    title = lines[0]
+                                if len(lines) >= 3:
+                                    desc = lines[2]
+                            if not title:
+                                title = a.get_text(strip=True)
 
-                    for item in items:
-                        pub_data = self._parse_publication_item(item, base_url=base)
-                        if pub_data:
+                            pub_id_match = re.search(r"/publication/(\d{4})/(\d{2})/(\d{2})/([a-f0-9]+)/", href)
+                            if pub_id_match:
+                                y, m, d, h = pub_id_match.groups()
+                                rel_date = f"{y}-{m}-{d}"
+                            else:
+                                rel_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+                            slug_title = self._slugify(title)[:60]
+                            pub_id = f"{rel_date}_{slug_title}"
+
+                            if pub_id in seen_pub_ids:
+                                if pub_id_match:
+                                    pub_id = f"{rel_date}_{slug_title}_{h[:6]}"
+                                else:
+                                    count = 2
+                                    while f"{pub_id}_{count}" in seen_pub_ids:
+                                        count += 1
+                                    pub_id = f"{pub_id}_{count}"
+                            seen_pub_ids.add(pub_id)
+
+                            # Determine category
+                            cat = "Statistik Umum"
+                            tl = title.lower()
+                            if "ikan" in tl or "perikanan" in tl:
+                                cat = "Perikanan"
+                            elif "tani" in tl or "panen" in tl or "padi" in tl:
+                                cat = "Pertanian"
+                            elif "hortikultura" in tl:
+                                cat = "Pertanian & Hortikultura"
+                            elif "sejahtera" in tl or "sosial" in tl or "miskin" in tl:
+                                cat = "Kesejahteraan & Sosial"
+                            elif "tenaga" in tl or "kerja" in tl:
+                                cat = "Ketenagakerjaan"
+                            elif "angka" in tl or "daerah" in tl:
+                                cat = "Statistik Umum & Kompendium"
+                            elif "industri" in tl:
+                                cat = "Industri & UMKM"
+                            elif "pdrb" in tl or "ekonomi" in tl:
+                                cat = "Ekonomi & PDRB"
+                            elif "sehat" in tl or "kesehatan" in tl:
+                                cat = "Kesehatan"
+                            elif "didik" in tl or "pendidikan" in tl:
+                                cat = "Pendidikan"
+
+                            pub_data = {
+                                "publication_id": pub_id,
+                                "title": title,
+                                "release_date": rel_date,
+                                "category": cat,
+                                "detail_url": href,
+                                "pdf_url": href,
+                                "description": desc,
+                                "region": "Kabupaten Demak"
+                            }
                             publications.append(pub_data)
+                            new_in_page += 1
 
-                    if publications:
-                        logger.info(f"Found {len(publications)} publications on {base}")
-                        break
+                if not has_demak_link or (new_in_page == 0 and page > 2):
+                    break
 
-                except Exception as e:
-                    logger.warning(f"Error connecting to {url}: {e}")
-
+        logger.info(f"Discovered total of {len(publications)} BPS Demak publications across all keywords and kecamatan.")
         return publications
 
-    def _parse_publication_item(self, item: BeautifulSoup, base_url: str) -> Optional[Dict[str, Any]]:
-        """Extracts publication metadata fields from an HTML node."""
-        title_tag = item.find(["h2", "h3", "h4", "h5", "a"], class_=lambda c: c and ("title" in c.lower() or "judul" in c.lower()))
-        if not title_tag:
-            title_tag = item.find("a", href=re.compile(r"/publication/|/publikasi/"))
-        
-        if not title_tag:
-            return None
-
-        title = title_tag.get_text(strip=True)
-        if not title or len(title) < 5:
-            return None
-
-        detail_url = ""
-        if title_tag.name == "a" and title_tag.get("href"):
-            detail_url = urljoin(base_url, title_tag["href"])
-        else:
-            link_tag = item.find("a", href=True)
-            if link_tag:
-                detail_url = urljoin(base_url, link_tag["href"])
-
-        pub_id_match = re.search(r"/publication/(\d+)|/(\d{10,})", detail_url)
-        if pub_id_match:
-            pub_id = pub_id_match.group(1) or pub_id_match.group(2)
-        else:
-            pub_id = hashlib.md5(f"{title}_{detail_url}".encode()).hexdigest()[:12]
-
-        date_tag = item.find(string=re.compile(r"(\d{1,2}\s+[A-Za-z]+\s+\d{4}|\d{4}-\d{2}-\d{2})"))
-        date_raw = date_tag.strip() if date_tag else ""
-        release_date = self._parse_indonesian_date(date_raw)
-
-        category_tag = item.find(class_=lambda c: c and ("badge" in c.lower() or "category" in c.lower() or "subjek" in c.lower()))
-        category = category_tag.get_text(strip=True) if category_tag else "Statistik Umum"
-
-        pdf_tag = item.find("a", href=re.compile(r"\.pdf|/download/|/get/"))
-        pdf_url = urljoin(base_url, pdf_tag["href"]) if pdf_tag else detail_url
-
-        return {
-            "publication_id": pub_id,
-            "title": title,
-            "release_date": release_date,
-            "category": category,
-            "detail_url": detail_url,
-            "pdf_url": pdf_url,
-            "region": "Kabupaten Demak"
-        }
-
     def resolve_pdf_download_url(self, pub_meta: Dict[str, Any]) -> Optional[str]:
-        """Resolves direct PDF download endpoint."""
-        pdf_url = pub_meta.get("pdf_url")
-        if pdf_url and pdf_url.endswith(".pdf"):
-            return pdf_url
-
-        detail_url = pub_meta.get("detail_url") or pdf_url
+        """Resolves direct PDF download endpoint using curl."""
+        detail_url = pub_meta.get("detail_url") or pub_meta.get("pdf_url")
         if not detail_url:
             return None
 
-        try:
-            res = self.session.get(detail_url)
-            if res.status_code == 200:
-                soup = BeautifulSoup(res.text, "lxml")
-                download_btn = soup.find("a", href=re.compile(r"\.pdf|/publication/get/|/download/"))
-                if download_btn and download_btn.get("href"):
-                    return urljoin(self.base_url, download_btn["href"])
-        except Exception as e:
-            logger.warning(f"Could not resolve direct PDF link for {pub_meta['publication_id']}: {e}")
+        html = self._fetch_url_text_curl(detail_url)
+        if html:
+            soup = BeautifulSoup(html, "lxml")
+            download_btn = soup.find("a", href=lambda h: h and ("download.php" in h or ".pdf" in h))
+            if download_btn and download_btn.get("href"):
+                return download_btn["href"]
 
-        return pdf_url
+        return None
 
     def download_pdf(self, pub_meta: Dict[str, Any]) -> Optional[Path]:
-        """Downloads the PDF if not already downloaded, organizing into /data_publikasi/demak/YYYY/MM/."""
+        """Downloads the PDF using curl and validates integrity."""
         pub_id = pub_meta["publication_id"]
         title = pub_meta["title"]
-        release_date = pub_meta["release_date"]
+        release_date = pub_meta.get("release_date", "2026-01-01")
+
+        try:
+            year, month, _ = release_date.split("-")
+        except Exception:
+            year, month = "2026", "01"
+
+        target_folder = self.target_dir / year / month
+        target_folder.mkdir(parents=True, exist_ok=True)
+
+        filename = f"{pub_id}.pdf"
+        target_file_path = target_folder / filename
+
+        # If already exists and is a valid PDF (> 1000 bytes)
+        if target_file_path.exists() and target_file_path.stat().st_size > 1000:
+            file_size = target_file_path.stat().st_size
+            self.registry.register_or_update_metadata(pub_meta)
+            self.registry.mark_download_success(pub_id, str(target_file_path), file_size)
+            logger.info(f"Using cached publication on disk: {target_file_path.name}")
+            return target_file_path
 
         if self.registry.is_already_downloaded(pub_id):
             logger.info(f"Skipping download (Already in registry): [{pub_id}] {title}")
@@ -236,49 +342,40 @@ class BPSPublicationScraper:
 
         download_url = self.resolve_pdf_download_url(pub_meta)
         if not download_url:
+            logger.warning(f"Could not resolve download button for [{pub_id}] {title}")
             self.registry.mark_download_failed(pub_id)
             return None
 
-        try:
-            year, month, _ = release_date.split("-")
-        except Exception:
-            year, month = datetime.utcnow().strftime("%Y"), datetime.utcnow().strftime("%m")
-
-        target_folder = self.target_dir / year / month
-        target_folder.mkdir(parents=True, exist_ok=True)
-
-        filename = f"{pub_id}_{self._slugify(title)}.pdf"
-        target_file_path = target_folder / filename
-
         logger.info(f"Downloading publication [{pub_id}] -> {target_file_path.name}")
 
+        import subprocess
         try:
-            with self.session.stream("GET", download_url) as stream_resp:
-                if stream_resp.status_code != 200:
-                    logger.error(f"Download HTTP error {stream_resp.status_code} for {download_url}")
-                    self.registry.mark_download_failed(pub_id)
-                    return None
-
-                total_size = int(stream_resp.headers.get("content-length", 0))
-                with open(target_file_path, "wb") as f, tqdm(
-                    total=total_size, unit="B", unit_scale=True, desc=filename[:30]
-                ) as pbar:
-                    for chunk in stream_resp.iter_bytes(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            pbar.update(len(chunk))
-
-            file_size = target_file_path.stat().st_size
-            self.registry.register_or_update_metadata(pub_meta)
-            self.registry.mark_download_success(
-                publication_id=pub_id,
-                file_path=str(target_file_path),
-                file_size=file_size
+            res = subprocess.run(
+                ["curl.exe", "-s", "-L", "--max-time", "120", "-o", str(target_file_path), download_url],
+                capture_output=True
             )
-            return target_file_path
+            if res.returncode == 0 and target_file_path.exists():
+                file_size = target_file_path.stat().st_size
+                # Verify header
+                with open(target_file_path, "rb") as fp:
+                    header = fp.read(10)
+                if b"%PDF" in header and file_size > 1000:
+                    logger.success(f"Downloaded {target_file_path.name} ({file_size:,} bytes).")
+                    self.registry.register_or_update_metadata(pub_meta)
+                    self.registry.mark_download_success(
+                        publication_id=pub_id,
+                        file_path=str(target_file_path),
+                        file_size=file_size
+                    )
+                    return target_file_path
+                else:
+                    logger.warning(f"Downloaded file for {pub_id} is not a valid PDF. Removing.")
+                    target_file_path.unlink(missing_ok=True)
 
+            self.registry.mark_download_failed(pub_id)
+            return None
         except Exception as e:
-            logger.error(f"Exception during download of {pub_id}: {e}")
+            logger.error(f"Download exception for {pub_id}: {e}")
             if target_file_path.exists():
                 target_file_path.unlink(missing_ok=True)
             self.registry.mark_download_failed(pub_id)

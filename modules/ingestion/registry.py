@@ -2,6 +2,7 @@
 Publication Registry Module.
 Tracks downloaded and processed BPS publications in SQLite to prevent duplicate downloads.
 """
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -138,15 +139,72 @@ class PublicationRegistry:
             """, (tables_count, chunks_count, now, publication_id))
             conn.commit()
 
+    def is_already_extracted(self, publication_id: str) -> bool:
+        """Checks if publication is already marked as PROCESSED in extraction."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT extraction_status FROM publications WHERE publication_id = ?",
+                (publication_id,)
+            )
+            row = cursor.fetchone()
+            if row and row["extraction_status"] == "PROCESSED":
+                return True
+            return False
+
     def get_pending_extractions(self) -> List[Dict[str, Any]]:
         """Returns publications that are downloaded but not yet extracted."""
+        items: List[Dict[str, Any]] = []
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT * FROM publications
-                WHERE download_status = 'DOWNLOADED' AND extraction_status != 'PROCESSED'
+                WHERE download_status IN ('DOWNLOADED', 'SUCCESS') AND extraction_status != 'PROCESSED'
             """)
-            return [dict(row) for row in cursor.fetchall()]
+            items = [dict(row) for row in cursor.fetchall()]
+
+        # Also discover any local PDFs on disk that have not been extracted yet
+        registered_paths = {it.get("local_file_path") for it in items}
+        for pdf in settings.DEMAK_DATA_DIR.rglob("*.pdf"):
+            if pdf.stat().st_size > 1000 and str(pdf) not in registered_paths:
+                db_rec = self.get_record_by_path(str(pdf))
+                if db_rec:
+                    if db_rec.get("extraction_status") != "PROCESSED":
+                        items.append(db_rec)
+                    continue
+
+                stem = pdf.stem
+                clean_title = re.sub(r"^(3321\w*|\d{4}_\d{2}_[a-f0-9]+)_?", "", stem).strip("_")
+                clean_title = clean_title.replace("_", " ").strip() or stem
+                year = pdf.parent.parent.name if pdf.parent.parent.name.isdigit() else "2026"
+                month = pdf.parent.name if pdf.parent.name.isdigit() else "01"
+                rel_date = f"{year}-{month}-01"
+                
+                # Slugify title
+                slug = re.sub(r"[^\w\s-]", "", clean_title.lower())
+                slug = re.sub(r"[\s_-]+", "_", slug).strip("_")[:60]
+                pub_id = f"{rel_date}_{slug}" if slug else f"{rel_date}_{stem}"
+
+                if not self.is_already_extracted(pub_id):
+                    if not any(it.get("publication_id") == pub_id for it in items):
+                        items.append({
+                            "publication_id": pub_id,
+                            "title": clean_title,
+                            "release_date": rel_date,
+                            "category": "Statistik Umum",
+                            "region": "Kabupaten Demak",
+                            "local_file_path": str(pdf)
+                        })
+
+        return items
+
+    def get_record_by_path(self, file_path: str) -> Optional[Dict[str, Any]]:
+        """Finds publication record by local_file_path."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM publications WHERE local_file_path = ?", (file_path,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def get_all_records(self) -> List[Dict[str, Any]]:
         """Returns all publication records in registry."""

@@ -63,13 +63,30 @@ class BPSPipelineOrchestrator:
         Extract -> Structure JSON -> Vectorize -> Store DBs -> Update Registry.
         """
         pdf_path = Path(pdf_path)
-        meta = metadata or {
-            "publication_id": pdf_path.stem.split("_")[0],
-            "title": pdf_path.stem,
-            "release_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "category": "Statistik Umum",
-            "region": "Kabupaten Demak"
-        }
+        if metadata:
+            meta = metadata
+        else:
+            reg_rec = self.registry.get_record_by_path(str(pdf_path))
+            if reg_rec:
+                meta = reg_rec
+            else:
+                stem = pdf_path.stem
+                import re
+                clean_title = re.sub(r"^(3321\w*|\d{4}_\d{2}_[a-f0-9]+)_?", "", stem).strip("_")
+                clean_title = clean_title.replace("_", " ").strip() or stem
+                year = pdf_path.parent.parent.name if pdf_path.parent.parent.name.isdigit() else "2026"
+                month = pdf_path.parent.name if pdf_path.parent.name.isdigit() else "01"
+                rel_date = f"{year}-{month}-01"
+                slug = re.sub(r"[^\w\s-]", "", clean_title.lower())
+                slug = re.sub(r"[\s_-]+", "_", slug).strip("_")[:60]
+                pub_id = f"{rel_date}_{slug}" if slug else f"{rel_date}_{stem}"
+                meta = {
+                    "publication_id": pub_id,
+                    "title": clean_title,
+                    "release_date": rel_date,
+                    "category": "Statistik Umum",
+                    "region": "Kabupaten Demak"
+                }
         pub_id = meta["publication_id"]
 
         logger.info(f"========== Processing Document [{pub_id}]: {pdf_path.name} ==========")
@@ -82,13 +99,14 @@ class BPSPipelineOrchestrator:
 
         if not rag_chunks:
             logger.warning(f"No usable tables or narrative chunks extracted from {pdf_path.name}")
+            self.registry.mark_extraction_completed(publication_id=pub_id, tables_count=0, chunks_count=0)
             return {"status": "EMPTY", "chunks_count": 0, "dokumen_id": pub_id}
 
         # Step 3: Vectorization (Embedding generation)
         embedded_chunks = self.embedder.embed_rag_chunks(rag_chunks)
 
         # Step 4: Main Data Storage
-        # 4a. Document Store (Raw & Structured JSON)
+        # 4a. Document Store (Granular Per-Table & Per-Document JSON)
         self.doc_store.save_document(
             doc_id=pub_id,
             doc_metadata={
@@ -101,7 +119,8 @@ class BPSPipelineOrchestrator:
                 "total_tabel": extracted_doc["total_tabel"],
                 "total_teks": extracted_doc["total_teks"]
             },
-            chunks=embedded_chunks
+            chunks=embedded_chunks,
+            extracted_doc=extracted_doc
         )
 
         # 4b. Vector DB (ChromaDB / SQLite Vector Store with metadata payloads)
@@ -372,6 +391,10 @@ class BPSPipelineOrchestrator:
                 print(f"\n[Result #{idx}] Score: {res.get('score', 0):.4f} | Chunk ID: {res['chunk_id']}")
                 print(f"  * Dokumen : {meta.get('dokumen_sumber')} (Tahun {meta.get('tahun')}, Hal. {meta.get('halaman')})")
                 print(f"  * Daerah  : {meta.get('daerah')} | Kategori: {meta.get('kategori')} | Tipe: {meta.get('tipe_konten')}")
+                if meta.get("file_json_tabel"):
+                    print(f"  * JSON Tabel   : {meta.get('file_json_tabel')}")
+                if meta.get("file_json_dokumen"):
+                    print(f"  * JSON Dokumen : {meta.get('file_json_dokumen')}")
                 print(f"  * Injected RAG Text:")
                 print(f"    \"{res['representasi_teks']}\"")
         print("=" * 80 + "\n")
@@ -445,7 +468,7 @@ def main():
 
     # Priority 3: Operational Modes
     if args.mode == "statis":
-        pages = args.max_pages if args.max_pages is not None else 2
+        pages = args.max_pages if args.max_pages is not None else 5
         orchestrator.run_mode_statis(max_pages=pages)
     elif args.mode == "all":
         pages = args.max_pages if args.max_pages is not None else 50

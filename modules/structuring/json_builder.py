@@ -137,6 +137,9 @@ class JSONStructureBuilder:
                 "tahun": tahun,
                 "halaman": halaman,
                 "tipe_konten": "tabel_baris",
+                "tabel_id": tabel_id,
+                "file_json_tabel": f"database/tables/{doc_id}/tabel_{tabel_id}.json",
+                "file_json_dokumen": f"database/documents/{doc_id}.json",
                 "judul_tabel": judul_tabel,
                 "satuan": satuan,
                 "sumber": sumber,
@@ -183,6 +186,8 @@ class JSONStructureBuilder:
             "tahun": tahun,
             "halaman": halaman,
             "tipe_konten": "teks_naratif",
+            "file_json_naratif": f"database/narratives/{doc_id}/naratif_{idx+1}.json",
+            "file_json_dokumen": f"database/documents/{doc_id}.json",
             "bab": bab,
             "sub_bab": sub_bab,
             "data": {

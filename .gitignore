@@ -16,12 +16,16 @@ env/
 logs/
 *.log
 
-# Databases & local storage
-# database/*.db
-# database/*.sqlite
-# database/*.json
-# data_publikasi/demak/*/*/*.pdf
-# !data_publikasi/demak/2026/01/sample_demak_test.pdf
+# Databases, Vector Store, & Raw Datasets (Local Data > 10GB)
+data_publikasi/
+database/
+!data_publikasi/.gitkeep
+!database/.gitkeep
+
+# Word & Office temporary lock files
+~$*.docx
+~$*.doc
+~*.tmp
 
 # IDE & OS files
 .vscode/
